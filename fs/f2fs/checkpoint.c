@@ -794,13 +794,12 @@ void update_dirty_page(struct inode *inode, struct page *page)
 			!S_ISLNK(inode->i_mode))
 		return;
 
-	if (type != FILE_INODE || test_opt(sbi, DATA_FLUSH)) {
-		spin_lock(&sbi->inode_lock[type]);
+	spin_lock(&sbi->inode_lock[type]);
+	if (type != FILE_INODE || test_opt(sbi, DATA_FLUSH))
 		__add_dirty_inode(inode, type);
-		spin_unlock(&sbi->inode_lock[type]);
-	}
-
 	inode_inc_dirty_pages(inode);
+	spin_unlock(&sbi->inode_lock[type]);
+
 	SetPagePrivate(page);
 	f2fs_trace_pid(page);
 }
@@ -923,7 +922,7 @@ static void wait_on_all_pages_writeback(struct f2fs_sb_info *sbi)
 	for (;;) {
 		prepare_to_wait(&sbi->cp_wait, &wait, TASK_UNINTERRUPTIBLE);
 
-		if (!get_pages(sbi, F2FS_WRITEBACK))
+		if (!atomic_read(&sbi->nr_wb_bios))
 			break;
 
 		io_schedule_timeout(5*HZ);
@@ -1088,7 +1087,7 @@ static int do_checkpoint(struct f2fs_sb_info *sbi, struct cp_control *cpc)
 
 	/* update user_block_counts */
 	sbi->last_valid_block_count = sbi->total_valid_block_count;
-	sbi->alloc_valid_block_count = 0;
+	percpu_counter_set(&sbi->alloc_valid_block_count, 0);
 
 	/* Here, we only have one bio having CP pack */
 	sync_meta_pages(sbi, META_FLUSH, LONG_MAX);
