@@ -26,14 +26,6 @@
 static struct kmem_cache *ino_entry_slab;
 struct kmem_cache *inode_entry_slab;
 
-void f2fs_stop_checkpoint(struct f2fs_sb_info *sbi, bool end_io)
-{
-	set_ckpt_flags(sbi->ckpt, CP_ERROR_FLAG);
-	sbi->sb->s_flags |= MS_RDONLY;
-	if (!end_io)
-		f2fs_flush_merged_bios(sbi);
-}
-
 /*
  * We guarantee no failure on the returned page.
  */
@@ -99,7 +91,7 @@ repeat:
 	 * meta page.
 	 */
 	if (unlikely(!PageUptodate(page)))
-		f2fs_stop_checkpoint(sbi, false);
+		f2fs_stop_checkpoint(sbi);
 out:
 	mark_page_accessed(page);
 	return page;
@@ -794,12 +786,13 @@ void update_dirty_page(struct inode *inode, struct page *page)
 			!S_ISLNK(inode->i_mode))
 		return;
 
-	spin_lock(&sbi->inode_lock[type]);
-	if (type != FILE_INODE || test_opt(sbi, DATA_FLUSH))
+	if (type != FILE_INODE || test_opt(sbi, DATA_FLUSH)) {
+		spin_lock(&sbi->inode_lock[type]);
 		__add_dirty_inode(inode, type);
-	inode_inc_dirty_pages(inode);
-	spin_unlock(&sbi->inode_lock[type]);
+		spin_unlock(&sbi->inode_lock[type]);
+	}
 
+	inode_inc_dirty_pages(inode);
 	SetPagePrivate(page);
 	f2fs_trace_pid(page);
 }
@@ -922,7 +915,7 @@ static void wait_on_all_pages_writeback(struct f2fs_sb_info *sbi)
 	for (;;) {
 		prepare_to_wait(&sbi->cp_wait, &wait, TASK_UNINTERRUPTIBLE);
 
-		if (!atomic_read(&sbi->nr_wb_bios))
+		if (!get_pages(sbi, F2FS_WRITEBACK))
 			break;
 
 		io_schedule_timeout(5*HZ);
@@ -1087,7 +1080,7 @@ static int do_checkpoint(struct f2fs_sb_info *sbi, struct cp_control *cpc)
 
 	/* update user_block_counts */
 	sbi->last_valid_block_count = sbi->total_valid_block_count;
-	percpu_counter_set(&sbi->alloc_valid_block_count, 0);
+	sbi->alloc_valid_block_count = 0;
 
 	/* Here, we only have one bio having CP pack */
 	sync_meta_pages(sbi, META_FLUSH, LONG_MAX);
