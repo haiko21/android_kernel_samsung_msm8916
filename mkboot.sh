@@ -1,3 +1,5 @@
+tools_muh/dtbtool -s 2048 -o dt.img -p output/scripts/dtc/ output/arch/arm/boot/dts/
+cp dt.img tools_muh/boot.img-dtb
 cp ./output/arch/arm/boot/zImage tools_muh/
 cd tools_muh
 cp zImage boot.img-zImage
