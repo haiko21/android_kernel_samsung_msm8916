@@ -94,3 +94,6 @@ x509.genkey
 output
 dt.img
 tools_muh/zip/*.zip
+tools_muh/boot.img
+tools_muh/zImage
+tools_muh/zip/boot.img
