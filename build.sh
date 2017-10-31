@@ -12,3 +12,4 @@ make -C $(pwd) O=output lineageos_a5ultexx_defconfig
 make -j5 -C $(pwd) O=output
 
 cp output/arch/arm/boot/Image $(pwd)/arch/arm/boot/zImage
+./mkboot.sh
